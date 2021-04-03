@@ -3,7 +3,7 @@ library(lubridate)
 library(ggplot2)
 
 # read in texas data csv
-cases_TX <- read.csv("./Projects/Project\ 2/data/COVID-19_cases_TX.csv")
+cases_TX <- read.csv("../../COVID-19_cases_TX.csv")
 colnames(cases_TX)
 head(cases_TX, 20)
 # remove state and state_fips_code features
@@ -44,7 +44,7 @@ lapply(cases_TX, FUN = Rnge)
 # -----------------------------------------------------------------------------------
 
 # read in US data w/ census csv
-cases_US_census <- read.csv("./Projects/Project\ 2/data/COVID-19_cases_plus_census.csv")
+cases_US_census <- read.csv("../../COVID-19_cases_plus_census.csv")
 colnames(cases_US_census)
 head(cases_US_census, 20)
 # subset to include chosen data attributes
@@ -52,6 +52,8 @@ cases_US_census <- subset(cases_US_census, select = c("county_fips_code",
                                                       "county_name",
                                                       "state",
                                                       "total_pop",
+                                                      "male_pop",
+                                                      "female_pop",
                                                       "median_age",
                                                       "white_pop",
                                                       "black_pop",
@@ -63,7 +65,13 @@ cases_US_census <- subset(cases_US_census, select = c("county_fips_code",
                                                       "income_per_capita",
                                                       "commuters_by_public_transportation",
                                                       "worked_at_home",
-                                                      "poverty"))
+                                                      "poverty",
+                                                      "gini_index",
+                                                      "associates_degree",
+                                                      "bachelors_degree",
+                                                      "high_school_diploma",
+                                                      "high_school_including_ged"
+                                                      ))
 
 # subset to only use Texas data
 cases_TX_census <- subset(cases_US_census, state == "TX")
@@ -153,16 +161,22 @@ head(dataset)
 
 public_commuters_cases_deaths <- dataset %>%
   select(
-    commuters_by_public_transportation,
+    poverty,
+    gini_index,
+    associates_degree,
+    bachelors_degree,
+    high_school_diploma,
+    high_school_including_ged,
+    confirmed_cases,
     deaths,
-    confirmed_cases
+    median_income
   ) %>%
   scale() %>%
   as_tibble()
 
 summary(public_commuters_cases_deaths)
 
-km1 <- kmeans(public_commuters_cases_deaths, centers = 3)
+km1 <- kmeans(public_commuters_cases_deaths, centers = 4)
 km1
 
 ggplot(pivot_longer(as_tibble(km1$centers,  rownames = "cluster"), 
@@ -187,7 +201,8 @@ ggplot(public_commuters_cases_deaths_cluster, aes(long, lat)) +
 races_fatality <- dataset %>%
   select(
     fatality_rate,
-    total_pop,
+    median_age,
+    total_pop
 #    median_age
 #    white_pop,
 #    hispanic_pop,
@@ -201,7 +216,7 @@ races_fatality <- dataset %>%
 
 summary(races_fatality)
 
-km2 <- kmeans(races_fatality, centers = 4)
+km2 <- kmeans(races_fatality, centers = 5)
 km2
 
 ggplot(pivot_longer(as_tibble(km2$centers,  rownames = "cluster"), 
