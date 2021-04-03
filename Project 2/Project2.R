@@ -1,6 +1,7 @@
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
+library(ggdendro)
 
 # read in texas data csv
 cases_TX <- read.csv("./Projects/Project\ 2/data/COVID-19_cases_TX.csv")
@@ -72,6 +73,8 @@ head(cases_TX_census)
 lapply(cases_TX_census, class)
 # check NA
 lapply(cases_TX_census, anyNA)
+
+summary(cases_TX_census)
 
 # AT THIS POINT NO NA VALUES AND TYPES ARE CORRECT
 
@@ -146,6 +149,17 @@ dataset <- dataset %>% mutate(county = county_name %>%
            str_to_lower() %>% str_replace('\\s+county\\s*$', ''))
 
 head(dataset)
+summary(dataset)
+
+lapply(dataset, FUN = mean)
+lapply(dataset, FUN = median)
+lapply(dataset, FUN = Mode)
+lapply(dataset, FUN = Freq)
+lapply(dataset, FUN = sd)
+lapply(dataset, FUN = var)
+lapply(dataset, FUN = min)
+lapply(dataset, FUN = max)
+lapply(dataset, FUN = Rnge)
 
 
 
@@ -160,6 +174,41 @@ public_commuters_cases_deaths <- dataset %>%
   scale() %>%
   as_tibble()
 
+# FIND BEST CLUSTER SIZE
+set.seed(1234)
+ks <- 2:10
+
+# finding best cluster num by knee
+WSS <- sapply(ks, FUN = function(k) {
+  kmeans(public_commuters_cases_deaths, centers = k, nstart = 5)$tot.withinss
+})
+ggplot(as_tibble(ks, WSS), aes(ks, WSS)) + geom_line() +
+  labs(title = "Kmeans Within Sum Squared of Clusters For Commuters By Public Transportation and Case/Death Counts")
+
+# finding best cluster num by silhoutte width
+d <- dist(public_commuters_cases_deaths)
+str(d)
+ASW <- sapply(ks, FUN=function(k) {
+  fpc::cluster.stats(d, kmeans(public_commuters_cases_deaths, centers=k, nstart = 5)$cluster)$avg.silwidth
+})
+best_k_ASW <- ks[which.max(ASW)]
+best_k_ASW
+ggplot(as_tibble(ks, ASW), aes(ks, ASW)) + geom_line() +
+  geom_vline(xintercept = best_k_ASW, color = "red", linetype = 2) +
+  labs(title = "Kmeans Average Silhoutte Width of Clusters For Commuters By Public Transportation and Case/Death Counts")
+
+# finding best cluster num by dunn index
+DI <- sapply(ks, FUN=function(k) {
+  fpc::cluster.stats(d, kmeans(public_commuters_cases_deaths, centers=k, nstart=5)$cluster)$dunn
+})
+best_k_DI <- ks[which.max(DI)]
+best_k_DI
+ggplot(as_tibble(ks, DI), aes(ks, DI)) + geom_line() +
+  geom_vline(xintercept = best_k_DI, color = "red", linetype = 2) +
+  labs(title = "Kmeans Dunn Index of Clusters For Commuters By Public Transportation and Case/Death Counts")
+
+
+# kmeans clustering
 summary(public_commuters_cases_deaths)
 
 km1 <- kmeans(public_commuters_cases_deaths, centers = 3)
@@ -169,18 +218,59 @@ ggplot(pivot_longer(as_tibble(km1$centers,  rownames = "cluster"),
   cols = colnames(km1$centers)), 
   aes(y = name, x = value)) +
   geom_bar(stat = "identity") +
-  facet_grid(rows = vars(cluster))
+  facet_grid(rows = vars(cluster)) +
+  labs(title = "Kmeans Cluster Centers Summary For Commuters By Public Transportation and Case/Death Counts")
 
 public_commuters_cases_deaths_cluster <- counties_TX %>%
   left_join(dataset %>% add_column(cluster = factor(km1$cluster)))
-
-head(public_commuters_cases_deaths_cluster)
 
 ggplot(public_commuters_cases_deaths_cluster, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = cluster)) +
   coord_quickmap() + 
   scale_fill_viridis_d() + 
-  labs(title = "Clusters of Commuters By Public Transportation and Case/Death Counts")
+  labs(title = "Kmeans Clusters of Commuters By Public Transportation and Case/Death Counts")
+
+# hierachical clustering
+hc1 <- hclust(d, method = "complete")
+ggdendrogram(hc1, labels = FALSE, theme_dendro = FALSE)
+clusters <- cutree(hc1, k = 4)
+
+clust.centroid = function(i, dat, clusters) {
+  ind = (clusters == i)
+  colMeans(dat[ind,])
+}
+centers <- sapply(unique(clusters), clust.centroid, public_commuters_cases_deaths, clusters)
+
+centers_inv <- t(centers)
+centers_inv
+rownames(centers_inv) <- c(1,2,3,4)
+centers_inv
+
+class(centers)
+
+ggplot(pivot_longer(as_tibble(centers_inv,  rownames = "cluster"), 
+                    cols = colnames(centers_inv)), 
+       aes(y = name, x = value)) +
+  geom_bar(stat = "identity") +
+  facet_grid(rows = vars(cluster)) +
+  labs(title = "Hierarchical Cluster Centers Summary For Commuters By Public Transportation and Case/Death Counts")
+
+
+public_commuters_cases_deaths_hccluster <- counties_TX %>%
+  left_join(dataset %>% add_column(cluster = factor(clusters)))
+
+rownames(public_commuters_cases_deaths) <- dataset$county_name
+
+public_commuters_cases_deaths
+
+factoextra::fviz_cluster(list(data = public_commuters_cases_deaths, cluster = clusters)) +
+  labs(title = "Hierarchical Clusters of Commuters By Public Transportation and Case/Death Counts")
+
+ggplot(public_commuters_cases_deaths_hccluster, aes(long, lat)) + 
+  geom_polygon(aes(group = group, fill = cluster)) +
+  coord_quickmap() + 
+  scale_fill_viridis_d() + 
+  labs(title = "Hierarchical Clusters of Commuters By Public Transportation and Case/Death Counts")
 
 ################################# Cluster 2 #################################
 
