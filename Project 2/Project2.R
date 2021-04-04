@@ -36,7 +36,7 @@ cases_TX <- subset(cases_TX, date >= "2020-03-05")
 # -----------------------------------------------------------------------------------
 
 # read in US data w/ census csv
-cases_US_census <- read.csv("./data/COVID-19_cases_plus_census.csv")
+cases_US_census <- read.csv("./Projects/Project\ 1/data/COVID-19_cases_plus_census.csv")
 colnames(cases_US_census)
 # subset to include chosen data attributes
 cases_US_census <- subset(cases_US_census, select = c("county_fips_code",
@@ -100,7 +100,13 @@ dataset <- dataset %>% mutate(
   asian_per_1000 = asian_pop/total_pop*1000,
   amerindian_per_1000 = amerindian_pop/total_pop*1000,
   other_per_1000 = other_race_pop/total_pop*1000,
+  male_per_1000 = male_pop/total_pop*1000,
+  female_per_1000 = female_pop/total_pop*1000,
   fatality_rate = deaths/confirmed_cases,
+  associates_per_1000 = associates_degree/total_pop*1000,
+  bachelors_per_1000 = bachelors_degree/total_pop*1000,
+  high_school_per_1000 = high_school_diploma/total_pop*1000,
+  ged_per_1000 = high_school_including_ged/total_pop*1000
 )
 
 colnames(dataset)
@@ -323,9 +329,112 @@ cases_deaths_fatality_hccluster %>% group_by(cluster) %>% summarize(
   avg_income = mean(median_income),
   avg_income_capita = mean(income_per_capita))
 
-################################# cluster 3 #################################
 
 
+################################# cluster 3 (4) #################################
+
+age_poverty_hispanic <- dataset %>%
+  select(
+    median_age,
+    poverty_1000,
+    hispanic_per_1000
+  ) %>% scale() %>% as_tibble()
+
+# FIND BEST CLUSTER SIZE
+set.seed(1234)
+ks <- 2:10
+
+# finding best cluster number by knee
+WSS <- sapply(ks, FUN = function(k) {
+  kmeans(age_poverty_hispanic, centers = k, nstart = 5)$tot.withinss
+})
+ggplot(as_tibble(ks, WSS), aes(ks, WSS)) + geom_line() +
+  labs(title = "Kmeans Within Sum Squared of Clusters For Poverty/Hispanic Per 1000 and Median Age")
+
+# finding best cluster number by silhouette width
+d3 <- dist(age_poverty_hispanic)
+str(d3)
+ASW <- sapply(ks, FUN=function(k) {
+  fpc::cluster.stats(d3, kmeans(age_poverty_hispanic, centers=k, nstart = 5)$cluster)$avg.silwidth
+})
+best_k_ASW <- ks[which.max(ASW)]
+best_k_ASW
+
+ggplot(as_tibble(ks, ASW), aes(ks, ASW)) + geom_line() +
+  geom_vline(xintercept = best_k_ASW, color = "red", linetype = 2) +
+  labs(title = "Kmeans Average Silhoutte Width of Clusters For Poverty/Hispanic Per 1000 and Median Age")
+
+# finding best cluster number by Dunn index
+DI <- sapply(ks, FUN=function(k) {
+  fpc::cluster.stats(d3, kmeans(age_poverty_hispanic, centers=k, nstart=5)$cluster)$dunn
+})
+best_k_DI <- ks[which.max(DI)]
+best_k_DI
+
+ggplot(as_tibble(ks, DI), aes(ks, DI)) + geom_line() +
+  geom_vline(xintercept = best_k_DI, color = "red", linetype = 2) +
+  labs(title = "Kmeans Dunn Index of Clusters For Poverty/Hispanic Per 1000 and Median Age")
+
+# k-means clustering
+summary(age_poverty_hispanic)
+
+km3 <- kmeans(age_poverty_hispanic, centers = 5)
+km3
+
+ggplot(pivot_longer(as_tibble(km3$centers,  rownames = "cluster"), cols = colnames(km3$centers)), aes(y = name, x = value)) +
+  geom_bar(stat = "identity") +
+  facet_grid(rows = vars(cluster)) +
+  labs(title = "Kmeans Cluster Centers Summary For Poverty/Hispanic Per 1000 and Median Age")
+
+age_poverty_hispanic_cluster <- counties_TX %>%
+  left_join(dataset %>% add_column(cluster = factor(km3$cluster)))
+
+ggplot(age_poverty_hispanic_cluster, aes(long, lat)) + 
+  geom_polygon(aes(group = group, fill = cluster)) +
+  coord_quickmap() + 
+  scale_fill_viridis_d() + 
+  labs(title = "Kmeans Clusters For Poverty/Hispanic Per 1000 and Median Age")
+
+age_poverty_hispanic_stats <- dataset %>% add_column(cluster = factor(km3$cluster))
+
+age_poverty_hispanic_stats %>% group_by(cluster) %>% summarize(
+  avg_cases = mean(cases_per_1000), 
+  avg_deaths = mean(deaths_per_1000),
+  avg_fatality = mean(fatality_rate))
+
+# hierarchical clustering
+hc3 <- hclust(d, method = "complete")
+ggdendrogram(hc3, labels = FALSE, theme_dendro = FALSE)
+hc3_clusters <- cutree(hc3, k = 5)
+hc3_centers <- sapply(unique(hc3_clusters), clust.centroid, age_poverty_hispanic, hc3_clusters)
+
+hc3_centers <- t(hc3_centers)
+rownames(hc3_centers) <- c(1,2,3,4,5)
+
+ggplot(pivot_longer(as_tibble(hc3_centers,  rownames = "cluster"), cols = colnames(hc3_centers)), aes(y = name, x = value)) +
+  geom_bar(stat = "identity") +
+  facet_grid(rows = vars(cluster)) +
+  labs(title = "Hierarchical Cluster Centers Summary For Poverty/Hispanic Per 1000 and Median Age")
+
+
+age_poverty_hispanic_hccluster <- counties_TX %>%
+  left_join(dataset %>% add_column(cluster = factor(hc3_clusters)))
+
+rownames(age_poverty_hispanic) <- dataset$county_name
+
+factoextra::fviz_cluster(list(data = age_poverty_hispanic, cluster = hc3_clusters)) +
+  labs(title = "Hierarchical Clusters For Poverty/Hispanic Per 1000 and Median Age")
+
+ggplot(age_poverty_hispanic_hccluster, aes(long, lat)) + 
+  geom_polygon(aes(group = group, fill = cluster)) +
+  coord_quickmap() + 
+  scale_fill_viridis_d() + 
+  labs(title = "Hierarchical Clusters For Poverty/Hispanic Per 1000 and Median Age")
+
+age_poverty_hispanic_hccluster %>% group_by(cluster) %>% summarize(
+  avg_cases = mean(cases_per_1000), 
+  avg_deaths = mean(deaths_per_1000),
+  avg_fatality = mean(fatality_rate))
 
 ################################# cluster 4 #################################
 
