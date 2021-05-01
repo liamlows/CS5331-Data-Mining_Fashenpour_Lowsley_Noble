@@ -5,9 +5,23 @@ library(ggdendro)
 library(seriation)
 library(cluster)
 library(factoextra)
-
+# -----------------------------------------------------------------------------------
+# STAT FUNCTIONS
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+Freq <- function (x){
+  max(table(x))
+}
+Rnge <- function(x) {
+  if(is.numeric(x)){
+    (max(x) - min(x))
+  }
+}
+# -----------------------------------------------------------------------------------
 # read in Texas data csv
-cases_TX <- read.csv("./data/COVID-19_cases_TX.csv")
+cases_TX <- read.csv("./Projects/Project\ 3/data/COVID-19_cases_TX.csv")
 # remove state and state_fips_code features
 cases_TX <- subset(cases_TX, select = c("county_fips_code",
                                         "county_name",
@@ -31,7 +45,7 @@ cases_TX <- subset(cases_TX, date >= "2020-03-05")
 # -----------------------------------------------------------------------------------
 
 # read in US data w/ census csv
-cases_US_census <- read.csv("./Projects/Project\ 1/data/COVID-19_cases_plus_census.csv")
+cases_US_census <- read.csv("./Projects/Project\ 3/data/COVID-19_cases_plus_census.csv")
 colnames(cases_US_census)
 # subset to include chosen data attributes
 cases_US_census <- subset(cases_US_census, select = c("county_fips_code",
