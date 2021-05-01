@@ -1,12 +1,9 @@
 library(tidyverse)
-library(lubridate)
 library(ggplot2)
-library(ggdendro)
-library(seriation)
-library(cluster)
-library(factoextra)
 library(caret)
 library(FSelector)
+library(DT)
+library(seriation)
 # -----------------------------------------------------------------------------------
 # STAT FUNCTIONS
 Mode <- function(x) {
@@ -109,12 +106,12 @@ dataset_sel <- dataset %>% mutate(fatal = as.factor(deaths > 1.8))
 # match the map counties
 la_county <- dataset_sel$county_name[dataset_sel$state == 'LA']
 la_county <- gsub("[.]","",la_county) 
-la_county
 la_county <- gsub("\\s*\\w*$", "", la_county)
-la_county
 
 dataset_sel$county_name[dataset_sel$state == 'LA'] <- la_county
 dataset_sel$county_name[dataset_sel$state == 'LA']
+
+dataset_sel$county_name[dataset_sel$county_name=="DeWitt County" | dataset_sel$county_name=="Dewitt County" ] <- "De witt County"
 
 head(dataset_sel)
 
@@ -158,6 +155,38 @@ ggplot(counties_all, aes(long, lat)) +
 colnames(cases_train1)
 
 # check variable importance
-cases_train1 <- cases_train1 %>% select(-deaths, -confirmed_cases, fatality_rate)
+cases_train1 <- cases_train1 %>% select(-deaths, -confirmed_cases, -fatality_rate)
+
+cases_train1 %>%  chi.squared(fatal ~ ., data = .) %>% arrange(desc(attr_importance)) %>% head(n = 10)
+
+# RPART METHOD
+fit1 <- cases_train1 %>%
+  train(fatal ~ . - county_name - state,
+        data = . ,
+        method = "rpart",
+        trControl = trainControl(method = "cv", number = 10)
+  )
+fit1
+
+# RF METHOD
+fit2 <- cases_train1 %>%
+  train(fatal ~ . - county_name - state,
+        data = . ,
+        method = "rf",
+        trControl = trainControl(method = "cv", number = 10)
+  )
+fit2
+
+# NB METHOD
+fit3 <- cases_train1 %>%
+  train(fatal ~ . - county_name - state,
+        data = . ,
+        method = "nb",
+        trControl = trainControl(method = "cv", number = 10)
+  )
+fit3
+
+
+
 
 
