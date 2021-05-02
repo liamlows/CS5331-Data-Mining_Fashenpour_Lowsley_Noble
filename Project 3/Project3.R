@@ -59,21 +59,21 @@ lapply(cases_US_census, anyNA)
 dataset <- cases_US_census %>% mutate(
   confirmed_cases = confirmed_cases/total_pop*1000,
   deaths = deaths/total_pop*1000,
-  male_pop = male_pop/total_pop*1000,
-  female_pop = female_pop/total_pop*1000,
-  white_pop = white_pop/total_pop*1000,
-  black_pop = black_pop/total_pop*1000,
-  asian_pop = asian_pop/total_pop*1000,
-  hispanic_pop = hispanic_pop/total_pop*1000,
-  amerindian_pop = amerindian_pop/total_pop*1000,
-  other_race_pop = other_race_pop/total_pop*1000,
-  commuters_by_public_transportation = commuters_by_public_transportation/total_pop*1000,
-  worked_at_home = worked_at_home/total_pop*1000,
-  poverty = poverty/total_pop*1000,
-  associates_degree = associates_degree/total_pop*1000,
-  bachelors_degree = bachelors_degree/total_pop*1000,
-  high_school_diploma = high_school_diploma/total_pop*1000,
-  high_school_including_ged = high_school_including_ged/total_pop*1000,
+  male_pop = male_pop/total_pop,
+  female_pop = female_pop/total_pop,
+  white_pop = white_pop/total_pop,
+  black_pop = black_pop/total_pop,
+  asian_pop = asian_pop/total_pop,
+  hispanic_pop = hispanic_pop/total_pop,
+  amerindian_pop = amerindian_pop/total_pop,
+  other_race_pop = other_race_pop/total_pop,
+  commuters_by_public_transportation = commuters_by_public_transportation/total_pop,
+  worked_at_home = worked_at_home/total_pop,
+  poverty = poverty/total_pop,
+  associates_degree = associates_degree/total_pop,
+  bachelors_degree = bachelors_degree/total_pop,
+  high_school_diploma = high_school_diploma/total_pop,
+  high_school_including_ged = high_school_including_ged/total_pop,
   fatality_rate = deaths/confirmed_cases
 )
 summary(dataset)
@@ -83,21 +83,16 @@ dataset[which(is.na(dataset$fatality_rate)),]$fatality_rate <- 0
 # check
 summary(dataset)
 
-
-# counties <- as_tibble(map_data("county"))
-# counties_TX <- counties %>% dplyr::filter(region == "texas") %>% rename(c(county = subregion))
-# dataset <- dataset %>% mutate(county = county_name %>% str_to_lower() %>% str_replace('\\s+county\\s*$', ''))
-
 # statistic functions
-lapply(dataset, FUN = mean)
-lapply(dataset, FUN = median)
-lapply(dataset, FUN = Mode)
-lapply(dataset, FUN = Freq)
-lapply(dataset, FUN = sd)
-lapply(dataset, FUN = var)
-lapply(dataset, FUN = min)
-lapply(dataset, FUN = max)
-lapply(dataset, FUN = Rnge)
+#lapply(dataset, FUN = mean)
+#lapply(dataset, FUN = median)
+#lapply(dataset, FUN = Mode)
+#lapply(dataset, FUN = Freq)
+#lapply(dataset, FUN = sd)
+#lapply(dataset, FUN = var)
+#lapply(dataset, FUN = min)
+#lapply(dataset, FUN = max)
+#lapply(dataset, FUN = Rnge)
 
 # deaths per 1000 > 1.8
 dataset_sel <- dataset %>% mutate(fatal = as.factor(deaths > 1.8))
@@ -106,6 +101,7 @@ dataset_sel <- dataset %>% mutate(fatal = as.factor(deaths > 1.8))
 # match the map counties
 la_county <- dataset_sel$county_name[dataset_sel$state == 'LA']
 la_county <- gsub("[.]","",la_county) 
+la_county <- gsub("\\s*\\w*$", "", la_county)
 la_county <- gsub("\\s*\\w*$", "", la_county)
 
 dataset_sel$county_name[dataset_sel$state == 'LA'] <- la_county
@@ -123,6 +119,8 @@ dataset_sel %>% group_by(state) %>%
   summarize(fatal_pct = sum(fatal == TRUE)/n()) %>%
   arrange(desc(fatal_pct))
 
+# ########################### TRAINING #############################
+
 # train is not TX
 cases_train1 <- dataset_sel %>% filter(!(state %in% c("TX")))
 cases_train1 %>% pull(fatal) %>% table()
@@ -138,8 +136,6 @@ counties <- counties %>%
   mutate(state = state.abb[match(state, tolower(state.name))]) %>%
   select(state, county, long, lat, group)
 counties
-
-
 
 # add county names to map
 counties_all <- counties %>% left_join(cases_train1 %>% 
@@ -157,35 +153,71 @@ colnames(cases_train1)
 # check variable importance
 cases_train1 <- cases_train1 %>% select(-deaths, -confirmed_cases, -fatality_rate)
 
-cases_train1 %>%  chi.squared(fatal ~ ., data = .) %>% arrange(desc(attr_importance)) %>% head(n = 10)
+weights <- cases_train1 %>%  chi.squared(fatal ~ ., data = .) %>% as_tibble(rownames = "feature") %>% arrange(desc(attr_importance)) %>% head(n = 10) 
+
+weights
+
+ggplot(weights,
+  aes(x = attr_importance, y = reorder(feature, attr_importance))) +
+  geom_bar(stat = "identity") +
+  xlab("Importance score") + ylab("Feature") + labs(title = "Chi Squared Importance Test")
 
 # RPART METHOD
 fit1 <- cases_train1 %>%
   train(fatal ~ . - county_name - state,
         data = . ,
         method = "rpart",
-        trControl = trainControl(method = "cv", number = 10)
+        trControl = trainControl(method = "cv", number = 10),
+        preProcess= "scale"
   )
 fit1
+varImp(fit1)
 
 # RF METHOD
 fit2 <- cases_train1 %>%
   train(fatal ~ . - county_name - state,
         data = . ,
         method = "rf",
-        trControl = trainControl(method = "cv", number = 10)
+        trControl = trainControl(method = "cv", number = 10),
+        preProcess= "scale"
   )
 fit2
+varImp(fit2)
 
 # NB METHOD
 fit3 <- cases_train1 %>%
   train(fatal ~ . - county_name - state,
         data = . ,
         method = "nb",
-        trControl = trainControl(method = "cv", number = 10)
+        trControl = trainControl(method = "cv", number = 10),
+        preProcess= "scale"
   )
 fit3
+varImp(fit3)
 
+# KNN METHOD
+fit4 <- cases_train1 %>%
+  train(fatal ~ . - county_name - state,
+        data = . ,
+        method = "knn3",
+        trControl = trainControl(method = "cv", number = 10),
+        preProcess= "scale"
+  )
+fit4
+varImp(fit4)
+
+
+# TESTING
+
+test_fit1 <- cases_test1
+summary(test_fit1)
+
+test_fit1 <- test_fit1 %>% select(-deaths, -confirmed_cases, -fatality_rate, -county_name, -state, -fatal)
+head(test_fit1)
+
+test_fit1 <- test_fit1 %>% na.omit
+
+fatal_predicted <- predict(fit1, test_fit1)
 
 
 
