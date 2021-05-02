@@ -147,6 +147,12 @@ summary(dataset)
 # deaths per 1000 > 1.8
 dataset_sel <- dataset %>% mutate(fatal = as.factor(deaths > 1.6))
 
+mean(dataset$deaths)
+median(dataset$deaths)
+sum(dataset$deaths > 1.6)
+sum(dataset$deaths < 1.6)
+sum(dataset$state == "TX")
+
 # balance is ok
 dataset_sel %>% pull(fatal) %>% table()
 
@@ -314,68 +320,130 @@ ggplot(counties_test1, aes(long, lat)) +
 ggplot(counties_test1, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+  labs(title = "RPART Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 # RF
 test_fit2 <- cases_test1
 test_fit2 <- test_fit2 %>% na.omit
 test_fit2$fatal_predicted <- predict(fit2, test_fit2)
 cm2 <- confusionMatrix(data = test_fit2$fatal_predicted, ref = test_fit2$fatal)
+cm2
 draw_confusion_matrix(cm2)
 
-counties_test2 <- counties_TX %>% left_join(test_fit2 %>% 
+counties_test2 <- counties %>% left_join(test_fit2 %>% 
   mutate(county = county_name %>% str_to_lower() %>% 
   str_replace('\\s+county\\s*$', '')))
 
+# ggplot(counties_test2, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
+#   coord_quickmap() + 
+#   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+# 
+# ggplot(counties_test2, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
+#   coord_quickmap() + 
+#   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+
 ggplot(counties_test2, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+  labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 ggplot(counties_test2, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
-
+  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+  labs(title = "RF Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 
 # NB
 test_fit3 <- cases_test1
 test_fit3 <- test_fit3 %>% na.omit
 test_fit3$fatal_predicted <- predict(fit3, test_fit3)
-confusionMatrix(data = test_fit3$fatal_predicted, ref = test_fit3$fatal)
+cm3 <- confusionMatrix(data = test_fit3$fatal_predicted, ref = test_fit3$fatal)
 
-counties_test3 <- counties_TX %>% left_join(test_fit3 %>% 
+draw_confusion_matrix(cm3)
+
+counties_test3 <- counties %>% left_join(test_fit3 %>% 
   mutate(county = county_name %>% str_to_lower() %>% 
   str_replace('\\s+county\\s*$', '')))
 
+# ggplot(counties_test3, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
+#   coord_quickmap() + 
+#   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+# 
+# ggplot(counties_test3, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
+#   coord_quickmap() + 
+#   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+
 ggplot(counties_test3, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+  labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 ggplot(counties_test3, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+  labs(title = "NB Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+
 
 # KNN
 test_fit4 <- cases_test1
 test_fit4 <- test_fit4 %>% na.omit
 test_fit4$fatal_predicted <- predict(fit4, test_fit4)
-confusionMatrix(data = test_fit4$fatal_predicted, ref = test_fit4$fatal)
+cm4 <- confusionMatrix(data = test_fit4$fatal_predicted, ref = test_fit4$fatal)
+draw_confusion_matrix(cm4)
 
-counties_test4 <- counties_TX %>% left_join(test_fit4 %>% 
-                                             mutate(county = county_name %>% str_to_lower() %>% 
-                                                      str_replace('\\s+county\\s*$', '')))
+counties_test4 <- counties %>% left_join(test_fit4 %>% 
+  mutate(county = county_name %>% str_to_lower() %>% 
+  str_replace('\\s+county\\s*$', '')))
 
 ggplot(counties_test4, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
   coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+  labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 ggplot(counties_test4, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
   coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+  labs(title = "KNN Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+
+
+
+
+prob <- predict(fit1, test_fit1, type="prob")
+roc1 <- roc(test_fit1$fatal == "TRUE", prob[,"TRUE"])
+
+prob <- predict(fit2, test_fit2, type="prob")
+roc2 <- roc(test_fit2$fatal == "TRUE", prob[,"TRUE"])
+
+prob <- predict(fit3, test_fit3, type="prob")
+roc3 <- roc(test_fit3$fatal == "TRUE", prob[,"TRUE"])
+
+prob <- predict(fit4, test_fit4, type="prob")
+roc4 <- roc(test_fit4$fatal == "TRUE", prob[,"TRUE"])
+
+ggroc(list("RPART ROC"=roc1, "RF ROC"=roc2, "NB ROC"=roc3, "KNN ROC"=roc4)) + 
+  geom_abline(intercept = 1, slope = 1, color = "darkgrey") + 
+  labs(title="ROC Curves for each Model")
+roc1$auc
+roc2$auc
+roc3$auc
+roc4$auc
+
+resamps <- resamples(list(
+  rpart = fit1,
+  rf = fit2,
+  nb = fit3,
+  knn = fit4
+))
+summary(resamps)
+diffs <- diff(resamps)
+summary(diffs)
+
+
+
 

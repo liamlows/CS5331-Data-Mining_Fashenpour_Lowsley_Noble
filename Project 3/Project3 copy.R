@@ -22,32 +22,32 @@ Rnge <- function(x) {
 # read in US data w/ census csv
 cases_US_census <- read.csv("./Projects/Project\ 3/data/04-24-21_COVID-CENSUS.csv")
 # subset to include chosen data attributes
-cases_US_census <- subset(cases_US_census, select = c("county_name",
-                                                      "state",
-                                                      "total_pop",
-                                                      "confirmed_cases",
-                                                      "deaths",
-                                                      "male_pop",
-                                                      "female_pop",
-                                                      "white_pop",
-                                                      "black_pop",
-                                                      "asian_pop",
-                                                      "hispanic_pop",
-                                                      "amerindian_pop",
-                                                      #"other_race_pop",
-                                                      "commuters_by_public_transportation",
-                                                      "worked_at_home",
-                                                      "poverty",
-                                                      "associates_degree",
-                                                      "bachelors_degree",
-                                                      "high_school_diploma",
-                                                      "high_school_including_ged",
-                                                      "gini_index",
-                                                      "in_undergrad_college",
-                                                      "in_school",
-                                                      "median_age",
-                                                      "median_income",
-                                                      "income_per_capita"))
+# cases_US_census <- subset(cases_US_census, select = c("county_name",
+#                                                       "state",
+#                                                       "total_pop",
+#                                                       "confirmed_cases",
+#                                                       "deaths",
+#                                                       "male_pop",
+#                                                       "female_pop",
+#                                                       "white_pop",
+#                                                       "black_pop",
+#                                                       "asian_pop",
+#                                                       "hispanic_pop",
+#                                                       "amerindian_pop",
+#                                                       #"other_race_pop",
+#                                                       "commuters_by_public_transportation",
+#                                                       "worked_at_home",
+#                                                       "poverty",
+#                                                       "associates_degree",
+#                                                       "bachelors_degree",
+#                                                       "high_school_diploma",
+#                                                       "high_school_including_ged",
+#                                                       "gini_index",
+#                                                       "in_undergrad_college",
+#                                                       "in_school",
+#                                                       "median_age",
+#                                                       "median_income",
+#                                                       "income_per_capita"))
 
 #head(cases_US_census)
 # check types
@@ -67,6 +67,8 @@ cases_US_census$county_name[cases_US_census$state == 'LA'] <- la_county
 cases_US_census$county_name[cases_US_census$state == 'LA']
 cases_US_census$county_name[cases_US_census$county_name=="DeWitt County " | cases_US_census$county_name=="Dewitt County " ] <- "De witt County"
 
+cases_US_census <- cases_US_census %>% select(-state_fips_code, -county_fips_code, -geo_id)
+
 # Make character factors for analysis
 cases_US_census <- cases_US_census %>% mutate_if(is.character, factor)
 
@@ -76,26 +78,33 @@ cases_US_census <- cases_US_census %>% filter(confirmed_cases > 0)
 dataset <- cases_US_census %>% mutate(
   confirmed_cases = confirmed_cases/total_pop*1000,
   deaths = deaths/total_pop*1000,
-  male_pop = male_pop/total_pop,
-  female_pop = female_pop/total_pop,
-  white_pop = white_pop/total_pop,
-  black_pop = black_pop/total_pop,
-  asian_pop = asian_pop/total_pop,
-  hispanic_pop = hispanic_pop/total_pop,
-  amerindian_pop = amerindian_pop/total_pop,
-  #other_race_pop = other_race_pop/total_pop,
-  commuters_by_public_transportation = commuters_by_public_transportation/total_pop,
-  worked_at_home = worked_at_home/total_pop,
-  poverty = poverty/total_pop,
-  associates_degree = associates_degree/total_pop,
-  bachelors_degree = bachelors_degree/total_pop,
-  high_school_diploma = high_school_diploma/total_pop,
-  high_school_including_ged = high_school_including_ged/total_pop,
-  in_school = in_school/total_pop,
-  in_undergrad_college = in_undergrad_college/total_pop,
+  # male_pop = male_pop/total_pop,
+  # female_pop = female_pop/total_pop,
+  # white_pop = white_pop/total_pop,
+  # black_pop = black_pop/total_pop,
+  # asian_pop = asian_pop/total_pop,
+  # hispanic_pop = hispanic_pop/total_pop,
+  # amerindian_pop = amerindian_pop/total_pop,
+  # #other_race_pop = other_race_pop/total_pop,
+  # commuters_by_public_transportation = commuters_by_public_transportation/total_pop,
+  # worked_at_home = worked_at_home/total_pop,
+  # poverty = poverty/total_pop,
+  # associates_degree = associates_degree/total_pop,
+  # bachelors_degree = bachelors_degree/total_pop,
+  # high_school_diploma = high_school_diploma/total_pop,
+  # high_school_including_ged = high_school_including_ged/total_pop,
+  # in_school = in_school/total_pop,
+  # in_undergrad_college = in_undergrad_college/total_pop,
   fatality_rate = deaths/confirmed_cases
 )
 summary(dataset)
+
+dataset <- dataset[ , apply(dataset, 2, function(x) !any(is.na(x)))]
+
+
+
+
+
 # remove NA values because 0/0
 #dataset[which(is.na(dataset$fatality_rate)),]
 #dataset[which(is.na(dataset$fatality_rate)),]$fatality_rate <- 0
@@ -161,6 +170,7 @@ colnames(cases_train1)
 
 # check variable importance
 cases_train1 <- cases_train1 %>% select(-deaths, -confirmed_cases, -fatality_rate)
+cases_train1 <- cases_train1 %>% select(-date, -do_date)
 
 weights <- cases_train1 %>%  chi.squared(fatal ~ ., data = .) %>% as_tibble(rownames = "feature") %>% arrange(desc(attr_importance))
 
@@ -172,6 +182,8 @@ ggplot(weights,
   geom_bar(stat = "identity") +
   xlab("Importance score") + ylab("Feature") + labs(title = "Chi Squared Importance Test")
 
+head(cases_train1)
+
 # RPART METHOD
 fit1 <- cases_train1 %>%
   train(fatal ~ . - county_name - state,
@@ -179,6 +191,7 @@ fit1 <- cases_train1 %>%
         method = "rpart",
         tuneLength = 10,
         trControl = trainControl(method = "cv", number = 10),
+        preProcess= "scale"
   )
 fit1
 varImp(fit1)$importance
