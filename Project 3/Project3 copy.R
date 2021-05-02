@@ -38,19 +38,23 @@ cases_US_census <- subset(cases_US_census, select = c("county_name",
                                                       "commuters_by_public_transportation",
                                                       "worked_at_home",
                                                       "poverty",
+                                                      "associates_degree",
                                                       "bachelors_degree",
                                                       "high_school_diploma",
                                                       "high_school_including_ged",
                                                       "gini_index",
                                                       "in_undergrad_college",
                                                       "in_school",
-                                                      "million_dollar_housing_units",
-                                                      "walked_to_work",
-                                                      "masters_degree",
                                                       "median_age",
                                                       "median_income",
                                                       "income_per_capita"))
 
+#head(cases_US_census)
+# check types
+#lapply(cases_US_census, class)
+# check NA
+#lapply(cases_US_census, anyNA)
+# AT THIS POINT NO NA VALUES AND TYPES ARE CORRECT
 # -----------------------------------------------------------------------------------
 
 # county names in Louisiana contain 'Parish' at the end, need to remove them to
@@ -65,7 +69,7 @@ cases_US_census$county_name[cases_US_census$county_name=="DeWitt County " | case
 
 # Make character factors for analysis
 cases_US_census <- cases_US_census %>% mutate_if(is.character, factor)
-# remove any entries where confirmed cases are = 0
+
 cases_US_census <- cases_US_census %>% filter(confirmed_cases > 0) 
 
 # add per 1000 values
@@ -83,23 +87,38 @@ dataset <- cases_US_census %>% mutate(
   commuters_by_public_transportation = commuters_by_public_transportation/total_pop,
   worked_at_home = worked_at_home/total_pop,
   poverty = poverty/total_pop,
-  #associates_degree = associates_degree/total_pop,
+  associates_degree = associates_degree/total_pop,
   bachelors_degree = bachelors_degree/total_pop,
   high_school_diploma = high_school_diploma/total_pop,
   high_school_including_ged = high_school_including_ged/total_pop,
   in_school = in_school/total_pop,
   in_undergrad_college = in_undergrad_college/total_pop,
-  million_dollar_housing_units = million_dollar_housing_units/total_pop,
-  walked_to_work = walked_to_work/total_pop,
-  masters_degree = masters_degree/total_pop,
   fatality_rate = deaths/confirmed_cases
 )
 summary(dataset)
+# remove NA values because 0/0
+#dataset[which(is.na(dataset$fatality_rate)),]
+#dataset[which(is.na(dataset$fatality_rate)),]$fatality_rate <- 0
+# check
+#summary(dataset)
 
-# -----------------------------------------------------------------------------------
+# statistic functions
+#lapply(dataset, FUN = mean)
+#lapply(dataset, FUN = median)
+#lapply(dataset, FUN = Mode)
+#lapply(dataset, FUN = Freq)
+#lapply(dataset, FUN = sd)
+#lapply(dataset, FUN = var)
+#lapply(dataset, FUN = min)
+#lapply(dataset, FUN = max)
+#lapply(dataset, FUN = Rnge)
 
 # deaths per 1000 > 1.8
-dataset_sel <- dataset %>% mutate(fatal = as.factor(deaths > 1.6))
+dataset_sel <- dataset %>% mutate(fatal = as.factor(deaths > 1.8))
+
+
+
+#head(dataset_sel)
 
 # balance is ok
 dataset_sel %>% pull(fatal) %>% table()
@@ -107,20 +126,17 @@ dataset_sel %>% pull(fatal) %>% table()
 # states affected worst
 dataset_sel %>% group_by(state) %>% 
   summarize(fatal_pct = sum(fatal == TRUE)/n()) %>%
-  arrange(desc(fatal_pct)) %>% print(n=51)
+  arrange(desc(fatal_pct))
 
 # ########################### TRAINING #############################
 
 # train is not TX
-cases_train1 <- dataset_sel %>% filter(!(state %in% c("TX", "CA", "NY", "FL", "ND", "LA", "VT")))
-train_bal <- cases_train1 %>% pull(fatal) %>% table()
+cases_train1 <- dataset_sel %>% filter(!(state %in% c("TX")))
+cases_train1 %>% pull(fatal) %>% table()
 
 # test is TX
-cases_test1 <-  dataset_sel %>% filter((state %in% c("TX", "CA", "NY", "FL", "ND", "LA", "VT")))
-test_bal <- cases_test1 %>% pull(fatal) %>% table()
-
-# remove these for training
-cases_train1 <- cases_train1 %>% select(-deaths, -confirmed_cases, -fatality_rate)
+cases_test1 <-  dataset_sel %>% filter((state %in% c("TX")))
+cases_test1 %>% pull(fatal) %>% table()
 
 # obtain counties
 counties <- as_tibble(map_data("county"))
@@ -139,10 +155,15 @@ counties_all <- counties %>% left_join(cases_train1 %>%
 ggplot(counties_all, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+  labs(title = "U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.8 per 1000, Grey = less than 1.8 per 1000")
+
+colnames(cases_train1)
 
 # check variable importance
+cases_train1 <- cases_train1 %>% select(-deaths, -confirmed_cases, -fatality_rate)
+
 weights <- cases_train1 %>%  chi.squared(fatal ~ ., data = .) %>% as_tibble(rownames = "feature") %>% arrange(desc(attr_importance))
+
 weights
 print.data.frame(weights)
 
@@ -160,7 +181,7 @@ fit1 <- cases_train1 %>%
         trControl = trainControl(method = "cv", number = 10),
   )
 fit1
-varImp(fit1)
+varImp(fit1)$importance
 
 # RF METHOD
 fit2 <- cases_train1 %>%
@@ -214,84 +235,65 @@ varImp(fit5)
 test_fit1 <- cases_test1
 test_fit1 <- test_fit1 %>% na.omit
 test_fit1$fatal_predicted <- predict(fit1, test_fit1)
-confusionMatrix(data = test_fit1$fatal_predicted, ref = test_fit1$fatal)
 
 counties2 <- as_tibble(map_data("county"))
 counties_TX <- counties2 %>% dplyr::filter(region == "texas") %>% rename(c(county = subregion))
 
-counties_test1 <- counties_TX %>% left_join(test_fit1 %>% 
+counties_test <- counties_TX %>% left_join(test_fit1 %>% 
   mutate(county = county_name %>% str_to_lower() %>% 
   str_replace('\\s+county\\s*$', '')))
 
-ggplot(counties_test1, aes(long, lat)) + 
+ggplot(counties_test, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
   coord_quickmap() + 
   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
 
-ggplot(counties_test1, aes(long, lat)) + 
+ggplot(counties_test, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
   coord_quickmap() + 
   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+
+confusionMatrix(data = test_fit1$fatal_predicted, ref = test_fit1$fatal)
 
 # RF
 test_fit2 <- cases_test1
 test_fit2 <- test_fit2 %>% na.omit
 test_fit2$fatal_predicted <- predict(fit2, test_fit2)
-confusionMatrix(data = test_fit2$fatal_predicted, ref = test_fit2$fatal)
 
-counties_test2 <- counties_TX %>% left_join(test_fit2 %>% 
+counties_test <- counties_TX %>% left_join(test_fit2 %>% 
   mutate(county = county_name %>% str_to_lower() %>% 
   str_replace('\\s+county\\s*$', '')))
 
-ggplot(counties_test2, aes(long, lat)) + 
+ggplot(counties_test, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
   coord_quickmap() + 
   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
 
-ggplot(counties_test2, aes(long, lat)) + 
+ggplot(counties_test, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
   coord_quickmap() + 
   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
 
-
+confusionMatrix(data = test_fit2$fatal_predicted, ref = test_fit2$fatal)
 
 # NB
 test_fit3 <- cases_test1
 test_fit3 <- test_fit3 %>% na.omit
 test_fit3$fatal_predicted <- predict(fit3, test_fit3)
-confusionMatrix(data = test_fit3$fatal_predicted, ref = test_fit3$fatal)
 
-counties_test3 <- counties_TX %>% left_join(test_fit3 %>% 
+counties_test <- counties_TX %>% left_join(test_fit3 %>% 
   mutate(county = county_name %>% str_to_lower() %>% 
   str_replace('\\s+county\\s*$', '')))
 
-ggplot(counties_test3, aes(long, lat)) + 
+ggplot(counties_test, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
   coord_quickmap() + 
   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
 
-ggplot(counties_test3, aes(long, lat)) + 
+ggplot(counties_test, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
   coord_quickmap() + 
   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
 
-# KNN
-test_fit4 <- cases_test1
-test_fit4 <- test_fit4 %>% na.omit
-test_fit4$fatal_predicted <- predict(fit4, test_fit4)
-confusionMatrix(data = test_fit4$fatal_predicted, ref = test_fit4$fatal)
-
-counties_test4 <- counties_TX %>% left_join(test_fit4 %>% 
-                                             mutate(county = county_name %>% str_to_lower() %>% 
-                                                      str_replace('\\s+county\\s*$', '')))
-
-ggplot(counties_test4, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
-
-ggplot(counties_test4, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+confusionMatrix(data = test_fit3$fatal_predicted, ref = test_fit3$fatal)
 
