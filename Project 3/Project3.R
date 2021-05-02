@@ -4,6 +4,7 @@ library(caret)
 library(FSelector)
 library(DT)
 library(seriation)
+library(pROC)
 # -----------------------------------------------------------------------------------
 # STAT FUNCTIONS
 Mode <- function(x) {
@@ -18,6 +19,51 @@ Rnge <- function(x) {
     (max(x) - min(x))
   }
 }
+draw_confusion_matrix <- function(cm) {
+  
+  layout(matrix(c(1,1,2)))
+  par(mar=c(2,2,2,2))
+  plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+  title('CONFUSION MATRIX', cex.main=2)
+  
+  # create the matrix 
+  rect(150, 430, 240, 370, col='#3F97D0')
+  text(195, 435, 'Class1', cex=1.2)
+  rect(250, 430, 340, 370, col='#F7AD50')
+  text(295, 435, 'Class2', cex=1.2)
+  text(125, 370, 'Predicted', cex=1.3, srt=90, font=2)
+  text(245, 450, 'Actual', cex=1.3, font=2)
+  rect(150, 305, 240, 365, col='#F7AD50')
+  rect(250, 305, 340, 365, col='#3F97D0')
+  text(140, 400, 'Class1', cex=1.2, srt=90)
+  text(140, 335, 'Class2', cex=1.2, srt=90)
+  
+  # add in the cm results 
+  res <- as.numeric(cm$table)
+  text(195, 400, res[1], cex=1.6, font=2, col='white')
+  text(195, 335, res[2], cex=1.6, font=2, col='white')
+  text(295, 400, res[3], cex=1.6, font=2, col='white')
+  text(295, 335, res[4], cex=1.6, font=2, col='white')
+  
+  # add in the specifics 
+  plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "DETAILS", xaxt='n', yaxt='n')
+  text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+  text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+  text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+  text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+  text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+  text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+  text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+  text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+  text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+  text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+  
+  # add in the accuracy information 
+  text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+  text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+  text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+  text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
 # -----------------------------------------------------------------------------------
 # read in US data w/ census csv
 cases_US_census <- read.csv("./Projects/Project\ 3/data/04-24-21_COVID-CENSUS.csv")
@@ -160,7 +206,12 @@ fit1 <- cases_train1 %>%
         trControl = trainControl(method = "cv", number = 10),
   )
 fit1
-varImp(fit1)
+ggplot(fit1) + labs(title = "Accuracy With Increasing Complexity Parameter")
+
+ggplot(varImp(fit1),
+  aes(x = Overall, y = reorder(feature, Overall))) +
+  geom_bar(stat = "identity") +
+  xlab("Variable") + ylab("Importance %") + labs(title = "RPart Variable Importance")
 
 # RF METHOD
 fit2 <- cases_train1 %>%
@@ -171,7 +222,12 @@ fit2 <- cases_train1 %>%
         trControl = trainControl(method = "cv", number = 10),
   )
 fit2
-varImp(fit2)$importance
+ggplot(fit2) + labs(title = "Accuracy With Increasing MTRY Value")
+
+ggplot(varImp(fit2),
+       aes(x = Overall, y = reorder(feature, Overall))) +
+  geom_bar(stat = "identity") +
+  xlab("Variable") + ylab("Importance %") + labs(title = "Random Forest Variable Importance")
 
 # NB METHOD
 fit3 <- cases_train1 %>%
@@ -182,7 +238,12 @@ fit3 <- cases_train1 %>%
         trControl = trainControl(method = "cv", number = 10),
   )
 fit3
-varImp(fit3)
+ggplot(fit3) + labs(title = "Accuracy With Different Kernel Type")
+
+ggplot(varImp(fit3),
+       aes(x = Overall, y = reorder(feature, Overall))) +
+  geom_bar(stat = "identity") +
+  xlab("Variable") + ylab("Importance %") + labs(title = "Naive Bayes Variable Importance")
 
 # KNN METHOD
 fit4 <- cases_train1 %>%
@@ -194,7 +255,12 @@ fit4 <- cases_train1 %>%
         preProcess= "scale"
   )
 fit4
-varImp(fit4)
+ggplot(fit4) + labs(title = "Accuracy With Increasing Number of Neighbors")
+
+ggplot(varImp(fit4),
+       aes(x = Overall, y = reorder(feature, Overall))) +
+  geom_bar(stat = "identity") +
+  xlab("Variable") + ylab("Importance %") + labs(title = "KNN Variable Importance")
 
 # NEURAL NET METHOD
 fit5 <- cases_train1 %>%
@@ -214,30 +280,48 @@ varImp(fit5)
 test_fit1 <- cases_test1
 test_fit1 <- test_fit1 %>% na.omit
 test_fit1$fatal_predicted <- predict(fit1, test_fit1)
-confusionMatrix(data = test_fit1$fatal_predicted, ref = test_fit1$fatal)
+cm1 <- confusionMatrix(data = test_fit1$fatal_predicted, ref = test_fit1$fatal)
+draw_confusion_matrix(cm1)
+
+prob <- predict(fit1, test_fit1, type="prob")
+
+roc_graph <- roc(test_fit1$fatal == "TRUE", prob[,"TRUE"])
+roc_graph$auc
+ggroc(roc_graph) + geom_abline(intercept = 1, slope = 1, color = "darkgrey") + labs(title="ROC Curve for RPART")
 
 counties2 <- as_tibble(map_data("county"))
 counties_TX <- counties2 %>% dplyr::filter(region == "texas") %>% rename(c(county = subregion))
 
-counties_test1 <- counties_TX %>% left_join(test_fit1 %>% 
+counties_test1 <- counties %>% left_join(test_fit1 %>% 
   mutate(county = county_name %>% str_to_lower() %>% 
   str_replace('\\s+county\\s*$', '')))
 
+# ggplot(counties_test1, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
+#   coord_quickmap() + 
+#   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+# 
+# ggplot(counties_test1, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
+#   coord_quickmap() + 
+#   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+
 ggplot(counties_test1, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+  labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 ggplot(counties_test1, aes(long, lat)) + 
   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
+  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+  labs(title = "Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 # RF
 test_fit2 <- cases_test1
 test_fit2 <- test_fit2 %>% na.omit
 test_fit2$fatal_predicted <- predict(fit2, test_fit2)
-confusionMatrix(data = test_fit2$fatal_predicted, ref = test_fit2$fatal)
+cm2 <- confusionMatrix(data = test_fit2$fatal_predicted, ref = test_fit2$fatal)
+draw_confusion_matrix(cm2)
 
 counties_test2 <- counties_TX %>% left_join(test_fit2 %>% 
   mutate(county = county_name %>% str_to_lower() %>% 
