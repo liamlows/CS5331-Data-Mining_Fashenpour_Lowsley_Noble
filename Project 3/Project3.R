@@ -110,6 +110,12 @@ cases_US_census$county_name[cases_US_census$state == 'LA'] <- la_county
 cases_US_census$county_name[cases_US_census$state == 'LA']
 cases_US_census$county_name[cases_US_census$county_name=="DeWitt County " | cases_US_census$county_name=="Dewitt County " ] <- "De witt County"
 
+# adding for usmap plot
+map_census <- read.csv("./Projects/Project\ 3/data/04-24-21_COVID-CENSUS.csv")
+map_census <- subset(map_census, select = c("county_fips_code", "county_name", 'state'))
+map_census$county_name[cases_US_census$state == 'LA'] <- la_county
+map_census$county_name[map_census$county_name=="DeWitt County " | map_census$county_name=="Dewitt County " ] <- "De witt County"
+
 # Make character factors for analysis
 cases_US_census <- cases_US_census %>% mutate_if(is.character, factor)
 # remove any entries where confirmed cases are = 0
@@ -175,23 +181,31 @@ test_bal <- cases_test1 %>% pull(fatal) %>% table()
 # remove these for training
 cases_train1 <- cases_train1 %>% select(-deaths, -confirmed_cases, -fatality_rate)
 
-# obtain counties
-counties <- as_tibble(map_data("county"))
-counties <- counties %>% 
-  rename(c(county = subregion, state = region)) %>%
-  mutate(state = state.abb[match(state, tolower(state.name))]) %>%
-  select(state, county, long, lat, group)
-counties
+# # obtain counties
+# counties <- as_tibble(map_data("county"))
+# counties <- counties %>% 
+#   rename(c(county = subregion, state = region)) %>%
+#   mutate(state = state.abb[match(state, tolower(state.name))]) %>%
+#   select(state, county, long, lat, group)
+# counties
+# 
+# # add county names to map
+# counties_all <- counties %>% left_join(cases_train1 %>% 
+#     mutate(county = county_name %>% str_to_lower() %>% 
+#     str_replace('\\s+county\\s*$', '')))
+# 
+# # plot
+# ggplot(counties_all, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
+#   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
-# add county names to map
-counties_all <- counties %>% left_join(cases_train1 %>% 
-    mutate(county = county_name %>% str_to_lower() %>% 
-    str_replace('\\s+county\\s*$', '')))
-
-# plot
-ggplot(counties_all, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+# Map of actual classifications used in training
+map_df <- merge(cases_train1, map_census, by = c('county_name', 'state'))
+map_df <- subset(map_df, select=c("county_fips_code", "fatal"))
+colnames(map_df)[1] <- "fips"
+plot_usmap(regions="counties", data=map_df, value='fatal', labels = FALSE) +
+  scale_fill_manual(values = c(`FALSE` = "grey", `TRUE` = "red"), name = "Fatal")+
   labs(title = "U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 
@@ -199,7 +213,6 @@ ggplot(counties_all, aes(long, lat)) +
 # check variable importance
 weights <- cases_train1 %>%  chi.squared(fatal ~ ., data = .) %>% as_tibble(rownames = "feature") %>% arrange(desc(attr_importance))
 weights
-print.data.frame(weights)
 
 ggplot(weights,
   aes(x = attr_importance, y = reorder(feature, attr_importance))) +
@@ -234,7 +247,7 @@ fit2
 ggplot(fit2) + labs(title = "Accuracy With Increasing MTRY Value")
 
 ggplot(varImp(fit2),
-       aes(x = Overall, y = reorder(feature, Overall))) +
+  aes(x = Overall, y = reorder(feature, Overall))) +
   geom_bar(stat = "identity") +
   xlab("Variable") + ylab("Importance %") + labs(title = "Random Forest Variable Importance")
 
@@ -250,7 +263,7 @@ fit3
 ggplot(fit3) + labs(title = "Accuracy With Different Kernel Type")
 
 ggplot(varImp(fit3),
-       aes(x = Overall, y = reorder(feature, Overall))) +
+  aes(x = Overall, y = reorder(feature, Overall))) +
   geom_bar(stat = "identity") +
   xlab("Variable") + ylab("Importance %") + labs(title = "Naive Bayes Variable Importance")
 
@@ -267,43 +280,42 @@ fit4
 ggplot(fit4) + labs(title = "Accuracy With Increasing Number of Neighbors")
 
 ggplot(varImp(fit4),
-       aes(x = Overall, y = reorder(feature, Overall))) +
+  aes(x = Overall, y = reorder(feature, Overall))) +
   geom_bar(stat = "identity") +
   xlab("Variable") + ylab("Importance %") + labs(title = "KNN Variable Importance")
 
-# NEURAL NET METHOD
-fit5 <- cases_train1 %>%
-  train(fatal ~ . - county_name - state,
-        data = . ,
-        method = "nnet",
-        trControl = trainControl(method = "cv", number = 10),
-        trace=FALSE
-  )
-fit5
-varImp(fit5)
-
-
 # ########################### TESTING ########################### 
+
+# Actual Map
+map_df <- merge(cases_test1, map_census, by = c('county_name', 'state'))
+map_df <- subset(map_df, select=c("county_fips_code", "fatal"))
+colnames(map_df)[1] <- "fips"
+plot_usmap(regions="counties", data=map_df, value='fatal', labels = FALSE) +
+  scale_fill_manual(values = c(`FALSE` = "grey", `TRUE` = "red"), name = "Fatal")+
+  labs(title = "Actual U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 # RPART
 test_fit1 <- cases_test1
 test_fit1 <- test_fit1 %>% na.omit
 test_fit1$fatal_predicted <- predict(fit1, test_fit1)
 cm1 <- confusionMatrix(data = test_fit1$fatal_predicted, ref = test_fit1$fatal)
+cm1
 draw_confusion_matrix(cm1)
 
-prob <- predict(fit1, test_fit1, type="prob")
+# Predicted Map
+map_df <- merge(test_fit1, map_census, by = c('county_name', 'state'))
+map_df <- subset(map_df, select=c("county_fips_code", "fatal_predicted"))
+colnames(map_df)[1] <- "fips"
+plot_usmap(regions="counties", data=map_df, value='fatal_predicted', labels = FALSE) +
+  scale_fill_manual(values = c(`FALSE` = "grey", `TRUE` = "red"), name = "Fatal")+
+  labs(title = "RPART Predicted U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
-roc_graph <- roc(test_fit1$fatal == "TRUE", prob[,"TRUE"])
-roc_graph$auc
-ggroc(roc_graph) + geom_abline(intercept = 1, slope = 1, color = "darkgrey") + labs(title="ROC Curve for RPART")
-
-counties2 <- as_tibble(map_data("county"))
-counties_TX <- counties2 %>% dplyr::filter(region == "texas") %>% rename(c(county = subregion))
-
-counties_test1 <- counties %>% left_join(test_fit1 %>% 
-  mutate(county = county_name %>% str_to_lower() %>% 
-  str_replace('\\s+county\\s*$', '')))
+# counties2 <- as_tibble(map_data("county"))
+# counties_TX <- counties2 %>% dplyr::filter(region == "texas") %>% rename(c(county = subregion))
+# 
+# counties_test1 <- counties %>% left_join(test_fit1 %>% 
+#   mutate(county = county_name %>% str_to_lower() %>% 
+#   str_replace('\\s+county\\s*$', '')))
 
 # ggplot(counties_test1, aes(long, lat)) + 
 #   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
@@ -315,15 +327,15 @@ counties_test1 <- counties %>% left_join(test_fit1 %>%
 #   coord_quickmap() + 
 #   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
 
-ggplot(counties_test1, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
-
-ggplot(counties_test1, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
-  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "RPART Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+# ggplot(counties_test1, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
+#   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+# 
+# ggplot(counties_test1, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
+#   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "RPART Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 # RF
 test_fit2 <- cases_test1
@@ -333,9 +345,17 @@ cm2 <- confusionMatrix(data = test_fit2$fatal_predicted, ref = test_fit2$fatal)
 cm2
 draw_confusion_matrix(cm2)
 
-counties_test2 <- counties %>% left_join(test_fit2 %>% 
-  mutate(county = county_name %>% str_to_lower() %>% 
-  str_replace('\\s+county\\s*$', '')))
+# Predicted Map
+map_df <- merge(test_fit2, map_census, by = c('county_name', 'state'))
+map_df <- subset(map_df, select=c("county_fips_code", "fatal_predicted"))
+colnames(map_df)[1] <- "fips"
+plot_usmap(regions="counties", data=map_df, value='fatal_predicted', labels = FALSE) +
+  scale_fill_manual(values = c(`FALSE` = "grey", `TRUE` = "red"), name = "Fatal")+
+  labs(title = "RF Predicted U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+
+# counties_test2 <- counties %>% left_join(test_fit2 %>% 
+#   mutate(county = county_name %>% str_to_lower() %>% 
+#   str_replace('\\s+county\\s*$', '')))
 
 # ggplot(counties_test2, aes(long, lat)) + 
 #   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
@@ -347,15 +367,15 @@ counties_test2 <- counties %>% left_join(test_fit2 %>%
 #   coord_quickmap() + 
 #   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
 
-ggplot(counties_test2, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
-
-ggplot(counties_test2, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
-  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "RF Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+# ggplot(counties_test2, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
+#   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+# 
+# ggplot(counties_test2, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
+#   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "RF Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 
 # NB
@@ -366,9 +386,17 @@ cm3 <- confusionMatrix(data = test_fit3$fatal_predicted, ref = test_fit3$fatal)
 cm3
 draw_confusion_matrix(cm3)
 
-counties_test3 <- counties %>% left_join(test_fit3 %>% 
-  mutate(county = county_name %>% str_to_lower() %>% 
-  str_replace('\\s+county\\s*$', '')))
+# Predicted Map
+map_df <- merge(test_fit3, map_census, by = c('county_name', 'state'))
+map_df <- subset(map_df, select=c("county_fips_code", "fatal_predicted"))
+colnames(map_df)[1] <- "fips"
+plot_usmap(regions="counties", data=map_df, value='fatal_predicted', labels = FALSE) +
+  scale_fill_manual(values = c(`FALSE` = "grey", `TRUE` = "red"), name = "Fatal")+
+  labs(title = "NB Predicted U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+
+# counties_test3 <- counties %>% left_join(test_fit3 %>% 
+#   mutate(county = county_name %>% str_to_lower() %>% 
+#   str_replace('\\s+county\\s*$', '')))
 
 # ggplot(counties_test3, aes(long, lat)) + 
 #   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
@@ -380,15 +408,15 @@ counties_test3 <- counties %>% left_join(test_fit3 %>%
 #   coord_quickmap() + 
 #   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey'))
 
-ggplot(counties_test3, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
-
-ggplot(counties_test3, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
-  coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "NB Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+# ggplot(counties_test3, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
+#   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+# 
+# ggplot(counties_test3, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
+#   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "NB Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
 
 # KNN
@@ -396,26 +424,34 @@ test_fit4 <- cases_test1
 test_fit4 <- test_fit4 %>% na.omit
 test_fit4$fatal_predicted <- predict(fit4, test_fit4)
 cm4 <- confusionMatrix(data = test_fit4$fatal_predicted, ref = test_fit4$fatal)
+cm4
 draw_confusion_matrix(cm4)
 
-counties_test4 <- counties %>% left_join(test_fit4 %>% 
-  mutate(county = county_name %>% str_to_lower() %>% 
-  str_replace('\\s+county\\s*$', '')))
+# Predicted Map
+map_df <- merge(test_fit4, map_census, by = c('county_name', 'state'))
+map_df <- subset(map_df, select=c("county_fips_code", "fatal_predicted"))
+colnames(map_df)[1] <- "fips"
+plot_usmap(regions="counties", data=map_df, value='fatal_predicted', labels = FALSE) +
+  scale_fill_manual(values = c(`FALSE` = "grey", `TRUE` = "red"), name = "Fatal")+
+  labs(title = "KNN Predicted U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
-ggplot(counties_test4, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+# counties_test4 <- counties %>% left_join(test_fit4 %>% 
+#   mutate(county = county_name %>% str_to_lower() %>% 
+#   str_replace('\\s+county\\s*$', '')))
+# 
+# ggplot(counties_test4, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
+#   coord_quickmap() + 
+#   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "Actual Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+# 
+# ggplot(counties_test4, aes(long, lat)) + 
+#   geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
+#   coord_quickmap() + 
+#   scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
+#   labs(title = "KNN Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
 
-ggplot(counties_test4, aes(long, lat)) + 
-  geom_polygon(aes(group = group, fill = fatal_predicted), color = "black", size = 0.1) + 
-  coord_quickmap() + 
-  scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
-  labs(title = "KNN Predicted Classifications", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
-
-
-
+# MODEL COMPARISON
 
 prob <- predict(fit1, test_fit1, type="prob")
 roc1 <- roc(test_fit1$fatal == "TRUE", prob[,"TRUE"])
@@ -453,9 +489,12 @@ theme1$plot.symbol$pch = 16
 theme1$plot.line$col = rgb(1, 0, 0, .7)
 theme1$plot.line$lwd <- 2
 trellis.par.set(theme1)
-bwplot(resamps, layout = c(3, 1))
+bwplot(resamps, layout = c(2, 1), main="Accuracy & Kappa Statistics For Models")
 
 trellis.par.set(theme1)
-bwplot(diffs, layout = c(3, 1))
+bwplot(diffs, layout = c(2, 1), main="Comparison of Accuracy & Kappa Accross Models")
 
+
+trellis.par.set(caretTheme())
+dotplot(diffs)
 
