@@ -5,6 +5,7 @@ library(FSelector)
 library(DT)
 library(seriation)
 library(pROC)
+library(usmap)
 # -----------------------------------------------------------------------------------
 # STAT FUNCTIONS
 Mode <- function(x) {
@@ -28,15 +29,15 @@ draw_confusion_matrix <- function(cm) {
   
   # create the matrix 
   rect(150, 430, 240, 370, col='#3F97D0')
-  text(195, 435, 'Class1', cex=1.2)
+  text(195, 435, 'False', cex=1.2)
   rect(250, 430, 340, 370, col='#F7AD50')
-  text(295, 435, 'Class2', cex=1.2)
+  text(295, 435, 'True', cex=1.2)
   text(125, 370, 'Predicted', cex=1.3, srt=90, font=2)
   text(245, 450, 'Actual', cex=1.3, font=2)
   rect(150, 305, 240, 365, col='#F7AD50')
   rect(250, 305, 340, 365, col='#3F97D0')
-  text(140, 400, 'Class1', cex=1.2, srt=90)
-  text(140, 335, 'Class2', cex=1.2, srt=90)
+  text(140, 400, 'False', cex=1.2, srt=90)
+  text(140, 335, 'True', cex=1.2, srt=90)
   
   # add in the cm results 
   res <- as.numeric(cm$table)
@@ -192,6 +193,8 @@ ggplot(counties_all, aes(long, lat)) +
   geom_polygon(aes(group = group, fill = fatal), color = "black", size = 0.1) + 
   coord_quickmap() + scale_fill_manual(values = c('TRUE' = 'red', 'FALSE' = 'grey')) +
   labs(title = "U.S. Map of Deaths Per 1000", subtitle = "Red = greater than 1.6 per 1000, Grey = less than 1.6 per 1000")
+
+
 
 # check variable importance
 weights <- cases_train1 %>%  chi.squared(fatal ~ ., data = .) %>% as_tibble(rownames = "feature") %>% arrange(desc(attr_importance))
@@ -360,7 +363,7 @@ test_fit3 <- cases_test1
 test_fit3 <- test_fit3 %>% na.omit
 test_fit3$fatal_predicted <- predict(fit3, test_fit3)
 cm3 <- confusionMatrix(data = test_fit3$fatal_predicted, ref = test_fit3$fatal)
-
+cm3
 draw_confusion_matrix(cm3)
 
 counties_test3 <- counties %>% left_join(test_fit3 %>% 
@@ -444,6 +447,15 @@ summary(resamps)
 diffs <- diff(resamps)
 summary(diffs)
 
+theme1 <- trellis.par.get()
+theme1$plot.symbol$col = rgb(.2, .2, .2, .4)
+theme1$plot.symbol$pch = 16
+theme1$plot.line$col = rgb(1, 0, 0, .7)
+theme1$plot.line$lwd <- 2
+trellis.par.set(theme1)
+bwplot(resamps, layout = c(3, 1))
 
+trellis.par.set(theme1)
+bwplot(diffs, layout = c(3, 1))
 
 
